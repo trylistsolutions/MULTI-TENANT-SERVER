@@ -11,10 +11,23 @@ const { connectAlchemystDB } = require('./alchemyst/config/db');
 const { connectCoffeeDB } = require('./coffee/config/db');
 const { connectArobiscaSmsDB } = require('./arobisca-sms/config/db');
 
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Unhandled promise rejection:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[FATAL] Uncaught exception:', error);
+});
+
 // Initialize app
 const app = express();
 const server = http.createServer(app);
 const PORT = process.env.PORT || 5000;
+const HOST = '0.0.0.0';
+
+// Render can surface intermittent 502/connection-reset issues if keepalive is too short.
+server.keepAliveTimeout = 120000;
+server.headersTimeout = 120000;
 
 // Middleware
 app.use(cors({ origin: '*' }));
@@ -44,6 +57,14 @@ const connectDB = async () => {
 
 // Connect to database
 connectDB();
+
+console.log('[Startup] Required DB flags:', {
+  GOLDCHILD_DB_REQUIRED: process.env.GOLDCHILD_DB_REQUIRED || 'false',
+  BINARY_DB_REQUIRED: process.env.BINARY_DB_REQUIRED || 'false',
+  ALCHEMYST_DB_REQUIRED: process.env.ALCHEMYST_DB_REQUIRED || 'false',
+  COFFEE_DB_REQUIRED: process.env.COFFEE_DB_REQUIRED || 'false',
+  AROBISCA_SMS_DB_REQUIRED: process.env.AROBISCA_SMS_DB_REQUIRED || 'false'
+});
 
 let alchemystRouter = null;
 let alchemystBootError = null;
@@ -107,6 +128,7 @@ app.use('/arobisca-sms', (req, res, next) => {
 });
 
 // Connect Goldchild database at startup
+console.log('[Startup] Connecting Goldchild DB...');
 connectGoldchildDB().catch((error) => {
   console.error(`Error connecting Goldchild database: ${error.message}`);
 
@@ -116,6 +138,7 @@ connectGoldchildDB().catch((error) => {
 });
 
 // Connect Binary database at startup
+console.log('[Startup] Connecting Binary DB...');
 connectBinaryDB().then(() => {
   // console.log('[Binary] Connected. Recurring billing is handled by Pesapal + IPN; local cycle scheduler is disabled.');
 
@@ -131,6 +154,7 @@ connectBinaryDB().then(() => {
 });
 
 // Connect Alchemyst database at startup, then mount tenant routes
+console.log('[Startup] Connecting Alchemyst DB...');
 connectAlchemystDB()
   .then(() => {
     try {
@@ -153,6 +177,7 @@ connectAlchemystDB()
   });
 
 // Connect Coffee database at startup, then mount tenant routes
+console.log('[Startup] Connecting Coffee DB...');
 connectCoffeeDB()
   .then(() => {
     try {
@@ -175,6 +200,7 @@ connectCoffeeDB()
   });
 
 // Connect Arobisca SMS database at startup, then mount tenant routes
+console.log('[Startup] Connecting Arobisca SMS DB...');
 connectArobiscaSmsDB()
   .then(() => {
     try {
@@ -236,6 +262,15 @@ app.get('/api/health', (req, res) => {
   res.status(200).json({
     status: 'success',
     message: 'Server is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Root route to simplify platform/default health checks.
+app.get('/', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'Multi-tenant server is running',
     timestamp: new Date().toISOString()
   });
 });
@@ -337,6 +372,6 @@ app.use((err, req, res, next) => {
 const { clients } = startWebSocketServer(server);
 
 // Start server
-server.listen(PORT, () => {
-  console.log(`🚀 Nairobi Zoezi School Server running on port ${PORT}`);
+server.listen(PORT, HOST, () => {
+  console.log(`🚀 Nairobi Zoezi School Server running on ${HOST}:${PORT}`);
 });
