@@ -15,7 +15,7 @@ const Course = require('../models/courses');
 async function fixStudentExamScheme() {
     try {
         // Connect to MongoDB - UPDATE THIS CONNECTION STRING WITH YOUR DB CREDENTIALS
-        await mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://arobiscasms:HpdTZJ5LlS6EbJFk@arobisca-sms.k2o9l.mongodb.net/Arobisca?retryWrites=true&w=majority&appName=Arobisca-SMS', {
+        await mongoose.connect(process.env.AROBISCA_SMS_MONGODB_URI, {
             useNewUrlParser: true,
             useUnifiedTopology: true
         });

@@ -1,4 +1,13 @@
 const mongoose = require("mongoose");
+const { getArobiscaSmsDB } = require('../config/db');
+
+const arobiscaSmsConnection = getArobiscaSmsDB();
+const arobiscaSmsModel = (name, schema, collection) => {
+  if (!schema) {
+    return arobiscaSmsConnection.model(name);
+  }
+  return arobiscaSmsConnection.models[name] || arobiscaSmsConnection.model(name, schema, collection);
+};
 
 const groupSchema = new mongoose.Schema({
     tutorId: {

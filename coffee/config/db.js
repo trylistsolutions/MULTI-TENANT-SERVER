@@ -13,8 +13,8 @@ const connectCoffeeDB = async () => {
   }
 
   const mongoUri = process.env.COFFEE_MONGODB_URI;
-  const configuredDbName = process.env.COFFEE_DB_NAME || 'coffee';
-  const dbName = configuredDbName.toLowerCase();
+  const configuredDbName = process.env.COFFEE_DB_NAME;
+  const dbName = configuredDbName;
 
   if (configuredDbName !== dbName) {
     console.warn(`Coffee DB name normalized from "${configuredDbName}" to "${dbName}" to avoid MongoDB case-conflict.`);

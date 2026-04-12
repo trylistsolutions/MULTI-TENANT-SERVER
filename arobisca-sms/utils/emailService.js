@@ -1,7 +1,7 @@
 const nodemailer = require('nodemailer');
 
-const arobiscaEmailUser = process.env.AROBISCA_SMS_EMAIL || process.env.AROBISCA_EMAIL;
-const arobiscaEmailPassword = process.env.AROBISCA_SMS_EMAIL_PASSWORD || process.env.AROBISCA_EMAIL_PASSWORD;
+const arobiscaEmailUser = process.env.AROBISCA_SMS_EMAIL;
+const arobiscaEmailPassword = process.env.AROBISCA_SMS_EMAIL_PASSWORD;
 
 // Create transporter
 const transporter = nodemailer.createTransport({

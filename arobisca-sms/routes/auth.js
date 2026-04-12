@@ -25,7 +25,7 @@ const getUserModel = (role) => {
 router.post("/login", asyncHandler(async (req, res) => {
   const { email, username, password, role, admissionNumber, rememberMe } = req.body;
   const Model = getUserModel(role);
-  const jwtSecret = process.env.AROBISCA_SMS_JWT_SECRET || process.env.JWT_SECRET;
+  const jwtSecret = process.env.AROBISCA_SMS_JWT_SECRET;
 
   if (!Model) {
     return res.status(400).json({ success: false, message: "Invalid role" });
