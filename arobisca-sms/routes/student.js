@@ -2,7 +2,7 @@ const express = require('express');
 const asyncHandler = require('express-async-handler');
 const bcrypt = require('bcrypt');
 const router = express.Router();
-const mongoose = require('mongoose');
+const { getArobiscaSmsDB } = require('../config/db');
 const Student = require('../models/student');
 const Tutor = require('../models/tutors');
 const Course = require('../models/courses');
@@ -484,7 +484,7 @@ const uploadToCloudinary = (fileBuffer) => {
 
 // Register new student
 router.post('/register', upload.single('profileImage'), asyncHandler(async (req, res) => {
-  const session = await mongoose.startSession();
+  const session = await getArobiscaSmsDB().startSession();
   session.startTransaction();
 
   try {
@@ -650,7 +650,7 @@ router.get('/:admissionNumber', asyncHandler(async (req, res) => {
 // Update student
 router.put('/:admissionNumber/update', upload.single('profileImage'), asyncHandler(async (req, res) => {
   const { admissionNumber } = req.params;
-  const session = await mongoose.startSession();
+  const session = await getArobiscaSmsDB().startSession();
   session.startTransaction();
 
   try {
@@ -804,7 +804,7 @@ router.put('/:id/fee', asyncHandler(async (req, res) => {
 
 // Cancel student admission
 router.post('/:id/cancel-admission', asyncHandler(async (req, res) => {
-  const session = await mongoose.startSession();
+  const session = await getArobiscaSmsDB().startSession();
   session.startTransaction();
 
   try {
@@ -1014,7 +1014,7 @@ router.put('/:studentId/examResponses/:responseId/mark', asyncHandler(async (req
 
 // Graduate a student (transfer to alumni)
 router.post('/:studentId/graduate', asyncHandler(async (req, res) => {
-  const session = await mongoose.startSession();
+  const session = await getArobiscaSmsDB().startSession();
   session.startTransaction();
 
   try {

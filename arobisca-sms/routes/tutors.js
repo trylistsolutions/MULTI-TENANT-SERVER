@@ -1,7 +1,7 @@
 const express = require('express');
 const asyncHandler = require('express-async-handler');
 const router = express.Router();
-const mongoose = require('mongoose');
+const { getArobiscaSmsDB } = require('../config/db');
 const Tutor = require('../models/tutors'); // Create this model
 const multer = require('multer');
 const bcrypt = require('bcrypt');
@@ -65,7 +65,7 @@ router.get('/', asyncHandler(async (req, res) => {
 
 // ✅ Create a new tutor (with profile picture upload)
 router.post('/', upload.single('profilePicture'), asyncHandler(async (req, res) => {
-  const session = await mongoose.startSession();
+  const session = await getArobiscaSmsDB().startSession();
   session.startTransaction();
 
   try {
@@ -302,7 +302,7 @@ router.put('/:id/change-email', asyncHandler(async (req, res) => {
 
 // ✅ Update profile picture
 router.put('/:id/update-profile-picture', upload.single('profilePicture'), asyncHandler(async (req, res) => {
-  const session = await mongoose.startSession();
+  const session = await getArobiscaSmsDB().startSession();
   session.startTransaction();
 
   try {
@@ -414,7 +414,7 @@ router.put('/:id/salary/:month/pay', asyncHandler(async (req, res) => {
 
 // ✅ Delete a tutor
 router.delete('/:id', asyncHandler(async (req, res) => {
-  const session = await mongoose.startSession();
+  const session = await getArobiscaSmsDB().startSession();
   session.startTransaction();
 
   try {

@@ -1,7 +1,7 @@
 const express = require('express');
 const asyncHandler = require('express-async-handler');
 const router = express.Router();
-const mongoose = require('mongoose');
+const { getArobiscaSmsDB } = require('../config/db');
 const Staff = require('../models/staff'); // Create this model
 const multer = require('multer');
 const cloudinary = require('cloudinary').v2;
@@ -56,7 +56,7 @@ router.get('/', asyncHandler(async (req, res) => {
 
 // ✅ Create a new staff (with profile picture upload)
 router.post('/', upload.single('profilePicture'), asyncHandler(async (req, res) => {
-  const session = await mongoose.startSession();
+  const session = await getArobiscaSmsDB().startSession();
   session.startTransaction();
 
   try {
