@@ -889,13 +889,13 @@ const sendApplicationConfirmationEmail = async (application) => {
 // Send admin notification email
 const sendAdminNotificationEmail = async (application) => {
     try {
-        const adminEmail = process.env.ADMIN_EMAIL || 'admin@arobiscatrainingcenter.co.ke';
+        const adminEmail = process.env.AROBISCA_SMS_ADMIN_EMAIL || 'admin@arobiscatrainingcenter.co.ke';
         const html = generateAdminNotificationTemplate(application);
 
         await transporter.sendMail({
             from: arobiscaEmailUser,
             to: adminEmail,
-            cc: process.env.ADMIN_CC_EMAIL ? process.env.ADMIN_CC_EMAIL.split(',') : [],
+            cc: process.env.AROBISCA_SMS_ADMIN_CC_EMAIL ? process.env.AROBISCA_SMS_ADMIN_CC_EMAIL.split(',') : [],
             subject: `📋 New Application: ${application.firstName} ${application.lastName} - ${application.applicationNumber}`,
             html,
             replyTo: application.email
