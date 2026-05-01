@@ -12,8 +12,8 @@ const connectBinaryDB = async () => {
     return binaryConnectionPromise;
   }
 
-  const mongoUri = process.env.BINARY_MONGODB_URI || process.env.MONGODB_URI;
-  const configuredDbName = process.env.BINARY_DB_NAME || 'binary';
+  const mongoUri = process.env.BINARY_MONGODB_URI;
+  const configuredDbName = process.env.BINARY_DB_NAME;
   const dbName = configuredDbName.toLowerCase();
 
   if (configuredDbName !== dbName) {
