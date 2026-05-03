@@ -329,30 +329,30 @@ router.all('/ipn', async (req, res) => {
 
       console.log(`[Pesapal IPN] Updated invoice ${invoicePeriod} status to ${paymentStatus}:`, updateResult.modifiedCount, 'docs modified');
 
-// Update the matching paymentHistory entry (update existing "pending" entry instead of creating new)
-        const paymentHistoryUpdate = await BinaryClient.updateOne(
-          {
-            _id: clientId,
-            'services._id': serviceId,
-            'services.paymentHistory.pesapalOrderTrackingId': OrderTrackingId
-          },
-          {
-            $set: {
-              'services.$[svc].paymentHistory.$[ph].status': paymentStatus,
-              'services.$[svc].paymentHistory.$[ph].method': paymentMethod || 'PESAPAL',
-              'services.$[svc].paymentHistory.$[ph].confirmationCode': txnStatus.confirmation_code || '',
-              'services.$[svc].paymentHistory.$[ph].description': `Invoice ${invoicePeriod} payment - ${txnStatus.payment_status_description || ''}`
-            }
-          },
-          {
-            arrayFilters: [
-              { 'svc._id': new mongoose.Types.ObjectId(serviceId) },
-              { 'ph.pesapalOrderTrackingId': OrderTrackingId }
-            ]
+      // Update the matching paymentHistory entry (update existing "pending" entry instead of creating new)
+      const paymentHistoryUpdate = await BinaryClient.updateOne(
+        {
+          _id: clientId,
+          'services._id': serviceId,
+          'services.paymentHistory.pesapalOrderTrackingId': OrderTrackingId
+        },
+        {
+          $set: {
+            'services.$[svc].paymentHistory.$[ph].status': paymentStatus,
+            'services.$[svc].paymentHistory.$[ph].method': paymentMethod || 'PESAPAL',
+            'services.$[svc].paymentHistory.$[ph].confirmationCode': txnStatus.confirmation_code || '',
+            'services.$[svc].paymentHistory.$[ph].description': `Invoice ${invoicePeriod} payment - ${txnStatus.payment_status_description || ''}`
           }
-        );
-        
-        console.log(`[IPN INV] Updated payment history for order ${OrderTrackingId}:`, paymentHistoryUpdate.modifiedCount > 0 ? 'SUCCESS' : 'NO MATCH FOUND');
+        },
+        {
+          arrayFilters: [
+            { 'svc._id': new mongoose.Types.ObjectId(serviceId) },
+            { 'ph.pesapalOrderTrackingId': OrderTrackingId }
+          ]
+        }
+      );
+
+      console.log(`[IPN INV] Updated payment history for order ${OrderTrackingId}:`, paymentHistoryUpdate.modifiedCount > 0 ? 'SUCCESS' : 'NO MATCH FOUND');
       // If payment succeeded, mark the year as paid
       if (paymentStatus === 'success') {
         const year = invoicePeriod.length === 4 ? parseInt(invoicePeriod) : new Date().getFullYear();
@@ -457,19 +457,51 @@ router.all('/ipn', async (req, res) => {
           // The FIRST successful card payment (which enrolls the customer) comes back as a normal
           // IPNCHANGE with status_code=1 but without subscription_transaction_info. We must still
           // flip autoBillingEnabled on so the dashboard reflects the active subscription.
+          // After the autoBillingEnabled set block, still inside `if (paymentStatus === 'success')` and `if (service)`
+          // ── NEW: Mark the current-cycle invoice as paid ──
           if (service.paymentType === 'subscription') {
-            await BinaryClient.updateOne(
-              { _id: clientId, 'services._id': serviceId },
-              {
-                $set: {
-                  'services.$.autoBillingEnabled': true,
-                  'services.$.autoBillingActivatedAt': service.autoBillingActivatedAt || new Date(),
-                  'services.$.pesapalRecurringId': subscriptionInfo.correlation_id || service.pesapalRecurringId || '',
-                  'services.$.pesapalRecurringStatus': subscriptionInfo.correlation_id ? 'active' : (service.pesapalRecurringStatus || 'active')
+            const now = new Date();
+            const cycle = String(service.cycleLength || 'MONTHLY').toLowerCase();
+            const currentYear = now.getFullYear();
+
+            let invoicePeriod;
+            if (cycle === 'yearly') {
+              invoicePeriod = String(currentYear);
+            } else {
+              invoicePeriod = String(now.getMonth() + 1).padStart(2, '0');
+            }
+
+            // Find the invoice by period, or fall back to most recent pending invoice
+            const matchingInvoice = service.invoices?.find(inv => inv.period === invoicePeriod);
+            const targetPeriod = matchingInvoice
+              ? invoicePeriod
+              : service.invoices
+                ?.filter(inv => inv.status === 'pending')
+                ?.sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate))[0]
+                ?.period;
+
+            if (targetPeriod) {
+              const invoicePaidUpdate = await BinaryClient.updateOne(
+                {
+                  _id: clientId,
+                  'services._id': serviceId,
+                  'services.invoices.period': targetPeriod
+                },
+                {
+                  $set: { 'services.$[svc].invoices.$[inv].status': 'paid' },
+                  $addToSet: { 'services.$[svc].invoices.$[inv].paidYears': currentYear }
+                },
+                {
+                  arrayFilters: [
+                    { 'svc._id': new mongoose.Types.ObjectId(serviceId) },
+                    { 'inv.period': targetPeriod }
+                  ]
                 }
-              }
-            );
-            console.log(`[Pesapal IPN] ✅ Auto-billing activated for subscription service ${serviceId}`);
+              );
+              console.log(`[Pesapal IPN SVC] Marked invoice ${targetPeriod} as paid:`, invoicePaidUpdate.modifiedCount, 'docs modified');
+            } else {
+              console.warn(`[Pesapal IPN SVC] ⚠️ No matching invoice found for service ${serviceId}`);
+            }
           }
 
           // Update totalLifetimeValue
@@ -547,37 +579,56 @@ router.all('/ipn', async (req, res) => {
         );
 
         // Mark the current-cycle invoice as paid
+        // ─── REPLACE this block inside the SUB branch (after paymentStatus === 'success' check) ───
+
         if (paymentStatus === 'success') {
           const now = new Date();
           const currentYear = now.getFullYear();
+          const currentMonth = now.getMonth() + 1; // 1–12
 
-          // Determine the invoice period key:
-          // MONTHLY: "01"–"12"  YEARLY: "2025", "2026" …
           let invoicePeriod;
           if (cycle === 'yearly') {
             invoicePeriod = String(currentYear);
           } else {
-            invoicePeriod = String(now.getMonth() + 1).padStart(2, '0');
+            invoicePeriod = String(currentMonth).padStart(2, '0');
           }
 
-          const invoicePaidUpdate = await BinaryClient.updateOne(
-            {
-              _id: client._id,
-              'services._id': service._id,
-              'services.invoices.period': invoicePeriod
-            },
-            {
-              $set: { 'services.$[svc].invoices.$[inv].status': 'paid' },
-              $addToSet: { 'services.$[svc].invoices.$[inv].paidYears': currentYear }
-            },
-            {
-              arrayFilters: [
-                { 'svc._id': new mongoose.Types.ObjectId(service._id) },
-                { 'inv.period': invoicePeriod }
-              ]
-            }
-          );
-          console.log(`[Pesapal IPN] Marked invoice period ${invoicePeriod} as paid:`, invoicePaidUpdate.modifiedCount, 'docs modified');
+          // ── NEW: if no invoice matches the current period, find the most recent
+          //         unpaid invoice instead (covers mid-month setup-charge edge case)
+          const freshClient = await BinaryClient.findById(client._id);
+          const freshService = freshClient?.services?.id(service._id);
+          const matchingInvoice = freshService?.invoices?.find(inv => inv.period === invoicePeriod);
+
+          // Fall back to the most-recent pending invoice if the period key didn't match
+          const targetPeriod = matchingInvoice
+            ? invoicePeriod
+            : freshService?.invoices
+              ?.filter(inv => inv.status === 'pending')
+              ?.sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate))[0]
+              ?.period;
+
+          if (targetPeriod) {
+            const invoicePaidUpdate = await BinaryClient.updateOne(
+              {
+                _id: client._id,
+                'services._id': service._id,
+                'services.invoices.period': targetPeriod
+              },
+              {
+                $set: { 'services.$[svc].invoices.$[inv].status': 'paid' },
+                $addToSet: { 'services.$[svc].invoices.$[inv].paidYears': currentYear }
+              },
+              {
+                arrayFilters: [
+                  { 'svc._id': new mongoose.Types.ObjectId(service._id) },
+                  { 'inv.period': targetPeriod }
+                ]
+              }
+            );
+            console.log(`[Pesapal IPN] Marked invoice period ${targetPeriod} as paid:`, invoicePaidUpdate.modifiedCount, 'docs modified');
+          } else {
+            console.warn(`[Pesapal IPN] ⚠️ No matching or pending invoice found for service ${service._id} — skipping invoice mark`);
+          }
 
           // Update client lifetime value
           await BinaryClient.updateOne(

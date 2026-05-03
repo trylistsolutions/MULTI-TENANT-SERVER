@@ -7,21 +7,25 @@ const { getBinaryClientModel } = require('../models/BinaryClient');
 
 const run = async () => {
   try {
-    console.log('🚀 Starting one-time billing fix...');
+    console.log('🚀 Starting Zoezi billing fix...');
 
-    // Connect to Binary DB
     const connection = await connectBinaryDB();
     const Client = getBinaryClientModel(connection);
 
-    // 🔥 HARDCODED VALUES (your case)
-    const clientId = "69f4dd743a89c3cf9f7e30d1";
-    const serviceId = "69f4dd743a89c3cf9f7e30d2";
+    const clientId = "69f4fd5b0de47e081676d55e";
 
     const months = ["01", "02", "03", "04"];
     const year = 2026;
 
-    // ✅ RUN UPDATE
-    const result = await Client.updateOne(
+    // 🔥 SERVICE IDS
+    const monthlyServiceId = "69f4fd5b0de47e081676d55f";
+    const zoeziYearlyServiceId = "69f50fc7f6731ceb23363d8f";
+    const goldchildYearlyServiceId = "69f51014f6731ceb23363e0a";
+
+    // =========================
+    // 1. MONTHLY SERVICE UPDATE
+    // =========================
+    const monthlyResult = await Client.updateOne(
       { _id: new mongoose.Types.ObjectId(clientId) },
       {
         $set: {
@@ -34,29 +38,82 @@ const run = async () => {
       },
       {
         arrayFilters: [
-          { "service._id": new mongoose.Types.ObjectId(serviceId) },
+          { "service._id": new mongoose.Types.ObjectId(monthlyServiceId) },
           { "invoice.period": { $in: months } }
         ]
       }
     );
 
-    console.log('✅ Update complete');
-    console.log('Matched:', result.matchedCount);
-    console.log('Modified:', result.modifiedCount);
+    // =========================
+    // 2. ZOEZI YEARLY SERVICE
+    // =========================
+    const zoeziYearlyResult = await Client.updateOne(
+      { _id: new mongoose.Types.ObjectId(clientId) },
+      {
+        $set: {
+          "services.$[service].paymentHistory": [],
+          "services.$[service].invoices.$[invoice].status": "paid",
+          "services.$[service].invoices.$[invoice].paidYears": [year],
+          "services.$[service].invoices.$[invoice].emailSent": true,
+          "services.$[service].invoices.$[invoice].smsSent": true
+        }
+      },
+      {
+        arrayFilters: [
+          { "service._id": new mongoose.Types.ObjectId(zoeziYearlyServiceId) },
+          { "invoice.period": "2026" }
+        ]
+      }
+    );
 
-    // 🔍 OPTIONAL: FETCH UPDATED DOC TO VERIFY
+    // =========================
+    // 3. GOLDCHILD YEARLY SERVICE
+    // =========================
+    const goldchildYearlyResult = await Client.updateOne(
+      { _id: new mongoose.Types.ObjectId(clientId) },
+      {
+        $set: {
+          "services.$[service].paymentHistory": [],
+          "services.$[service].invoices.$[invoice].status": "paid",
+          "services.$[service].invoices.$[invoice].paidYears": [year],
+          "services.$[service].invoices.$[invoice].emailSent": true,
+          "services.$[service].invoices.$[invoice].smsSent": true
+        }
+      },
+      {
+        arrayFilters: [
+          { "service._id": new mongoose.Types.ObjectId(goldchildYearlyServiceId) },
+          { "invoice.period": "2026" }
+        ]
+      }
+    );
+
+    console.log('✅ DONE');
+
+    console.log('Monthly:', monthlyResult.modifiedCount);
+    console.log('Zoezi Yearly:', zoeziYearlyResult.modifiedCount);
+    console.log('Goldchild Yearly:', goldchildYearlyResult.modifiedCount);
+
+    // 🔍 VERIFY
     const updatedClient = await Client.findById(clientId).lean();
 
-    console.log('🧾 Updated invoices (Jan–Apr):');
-    const service = updatedClient.services.find(
-      s => s._id.toString() === serviceId
-    );
+    console.log('\n🧾 CHECK RESULTS:\n');
 
-    const filteredInvoices = service.invoices.filter(i =>
-      months.includes(i.period)
-    );
+    updatedClient.services.forEach(service => {
+      if (
+        service._id.toString() === monthlyServiceId ||
+        service._id.toString() === zoeziYearlyServiceId ||
+        service._id.toString() === goldchildYearlyServiceId
+      ) {
+        console.log(`\nService: ${service.serviceName}`);
 
-    console.dir(filteredInvoices, { depth: null });
+        const filtered = service.invoices.filter(i =>
+          months.includes(i.period) || i.period === "2026"
+        );
+
+        console.dir(filtered, { depth: null });
+      }
+    });
 
   } catch (error) {
     console.error('❌ Error running fix:', error);
